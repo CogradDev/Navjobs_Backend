@@ -13,6 +13,7 @@ const router = express.Router();
 
 router.post("/signup", async (req, res) => {
   const data = req.body;
+
   let isUser = await User.findOne({ email: data.email });
 
   if (isUser && isUser.isverified) {
