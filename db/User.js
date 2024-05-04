@@ -21,8 +21,8 @@ let schema = new mongoose.Schema(
     },
     isverified: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   { collation: { locale: "en" } }
 );
