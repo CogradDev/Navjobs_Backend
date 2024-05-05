@@ -55,8 +55,7 @@ router.post("/signup", async (req, res) => {
       userDetails
         .save()
         .then(() => {
-          console.log("This inside the userdetails");
-          sendOTP(req, res);
+          return sendOTP(req, res);
         })
         .catch((err) => {
           user
@@ -92,6 +91,8 @@ router.post("/login", (req, res, next) => {
       res.json({
         token: token,
         type: user.type,
+        success: true,
+        message: "User loged in successfully"
       });
     }
   )(req, res, next);
