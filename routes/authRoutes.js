@@ -2,7 +2,6 @@ const express = require("express");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const authKeys = require("../lib/authKeys");
-
 const User = require("../db/User");
 const JobApplicant = require("../db/JobApplicant");
 const OTPVerification = require("../db/OTP");
@@ -40,20 +39,20 @@ router.post("/signup", async (req, res) => {
       const userDetails =
         user.type == "recruiter"
           ? new Recruiter({
-              userId: user._id,
-              name: data.name,
-              contactNumber: data.contactNumber,
-              bio: data.bio,
-            })
+            userId: user._id,
+            name: data.name,
+            contactNumber: data.contactNumber,
+            bio: data.bio,
+          })
           : new JobApplicant({
-              userId: user._id,
-              name: data.name,
-              education: data.education,
-              skills: data.skills,
-              rating: data.rating,
-              resume: data.resume,
-              profile: data.profile,
-            });
+            userId: user._id,
+            name: data.name,
+            education: data.education,
+            skills: data.skills,
+            rating: data.rating,
+            resume: data.resume,
+            profile: data.profile,
+          });
 
       userDetails
         .save()
@@ -110,7 +109,7 @@ router.post("/verifyotp", async (req, res) => {
     // check whether the user with the email exists already.
     let userotp = await OTPVerification.findOne({ email: email });
     if (!userotp) {
-      return res.status(400).json({ success, message: "User doesn't exist." });
+      return res.status(400).json({ success, message: "User doesn't exists." });
     }
 
     const currDate = new Date();

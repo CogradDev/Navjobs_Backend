@@ -17,6 +17,7 @@ router.post("/jobs", jwtAuth, (req, res) => {
 
   if (user.type != "recruiter") {
     res.status(401).json({
+      success: false,
       message: "You don't have permissions to add jobs",
     });
     return;
@@ -41,10 +42,10 @@ router.post("/jobs", jwtAuth, (req, res) => {
   job
     .save()
     .then(() => {
-      res.json({ message: "Job added successfully to the database" });
+      res.json({ success: true, message: "Job added successfully to the database" });
     })
     .catch((err) => {
-      res.status(400).json(err);
+      res.status(400).json({success: false, message: err.message});
     });
 });
 
