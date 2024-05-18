@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const passportConfig = require('./lib/passportConfig');
 const cors = require('cors');
 const fs = require('fs');
+const fileUpload = require('express-fileupload');
 require('dotenv').config();
 
 // MongoDB
@@ -14,30 +15,32 @@ mongoose
 		useCreateIndex: true,
 		useFindAndModify: false
 	})
-	.then((res) => console.log('Connected to DB'))
+	.then(() => console.log('Connected to DB'))
 	.catch((err) => console.log(err));
 
-// initialising directories
-if (!fs.existsSync('./public')) {
-	fs.mkdirSync('./public');
-}
-if (!fs.existsSync('./public/resume')) {
-	fs.mkdirSync('./public/resume');
-}
-if (!fs.existsSync('./public/profile')) {
-	fs.mkdirSync('./public/profile');
-}
+// Initialising directories
+const directories = ['./public', './public/resume', './public/profile'];
+directories.forEach((dir) => {
+	if (!fs.existsSync(dir)) {
+		fs.mkdirSync(dir);
+	}
+});
 
 const app = express();
 const port = process.env.PORT || 4444;
 
 app.use(bodyParser.json()); // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
-
+app.use(fileUpload()); // Use express-fileupload
 // Setting up middlewares
 app.use(cors());
 app.use(express.json());
 app.use(passportConfig.initialize());
+
+// Route handler for the root URL "/"
+app.get('/', (req, res) => {
+	res.send('Welcome to my Cograd Express application!');
+});
 
 // Routing routes
 app.use('/auth', require('./routes/authRoutes'));
