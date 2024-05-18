@@ -1,177 +1,181 @@
-const express = require("express");
-const passport = require("passport");
-const jwt = require("jsonwebtoken");
-const authKeys = require("../lib/authKeys");
-const User = require("../db/User");
-const JobApplicant = require("../db/JobApplicant");
-const OTPVerification = require("../db/OTP");
-const Recruiter = require("../db/Recruiter");
-const sendOTP = require("../lib/sendMails");
-const bcrypt = require("bcryptjs");
+const express = require('express');
+const passport = require('passport');
+const jwt = require('jsonwebtoken');
+const authKeys = require('../lib/authKeys');
+const User = require('../db/User');
+const JobApplicant = require('../db/JobApplicant');
+const OTPVerification = require('../db/OTP');
+const Recruiter = require('../db/Recruiter');
+const sendOTP = require('../lib/sendMails');
+const bcrypt = require('bcryptjs');
+
 const router = express.Router();
 
-router.post("/signup", async (req, res) => {
-  const data = req.body;
+// Route to send OTP
+router.post('/sendotp', async (req, res) => {
+	const { email } = req.body;
 
-  let isUser = await User.findOne({ email: data.email });
+	try {
+		let user = await User.findOne({ email });
 
-  if (isUser && isUser.isverified) {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Sorry a user with this email already exists",
-      });
-  }
+		if (user && user.isverified) {
+			return res.status(400).json({
+				success: false,
+				message: 'This email is already verified. Please login directly.'
+			});
+		}
 
-  if (isUser && !isUser.isverified) {
-    return sendOTP(req, res);
-  }
-  let user = new User({
-    email: data.email,
-    password: data.password,
-    type: data.type,
-  });
-
-  user
-    .save()
-    .then(() => {
-      const userDetails =
-        user.type == "recruiter"
-          ? new Recruiter({
-            userId: user._id,
-            name: data.name,
-            contactNumber: data.contactNumber,
-            bio: data.bio,
-          })
-          : new JobApplicant({
-            userId: user._id,
-            name: data.name,
-            education: data.education,
-            skills: data.skills,
-            rating: data.rating,
-            resume: data.resume,
-            profile: data.profile,
-          });
-
-      userDetails
-        .save()
-        .then(() => {
-          return sendOTP(req, res);
-        })
-        .catch((err) => {
-          user
-            .delete()
-            .then(() => {
-              res.status(400).json(err);
-            })
-            .catch((err) => {
-              res.json({ error: err });
-            });
-          err;
-        });
-    })
-    .catch((err) => {
-      res.status(400).json(err);
-    });
+		await sendOTP(req, res);
+	} catch (err) {
+		console.error(err);
+		return res.status(500).json({ success: false, message: 'Server error: Try again after sometime.' });
+	}
 });
 
-router.post("/login", (req, res, next) => {
-  passport.authenticate(
-    "local",
-    { session: false },
-    function (err, user, info) {
-      if (err) {
-        return next(err);
-      }
-      if (!user) {
-        res.status(401).json(info);
-        return;
-      }
-      // Token
-      const token = jwt.sign({ _id: user._id }, authKeys.jwtSecretKey);
-      res.json({
-        token: token,
-        type: user.type,
-        success: true,
-        message: "User loged in successfully"
-      });
-    }
-  )(req, res, next);
+// Route to verify OTP
+router.post('/verifyotp', async (req, res) => {
+	const { email, otp } = req.body;
+
+	try {
+		const userotp = await OTPVerification.findOne({ email });
+
+		if (!userotp) {
+			return res.status(400).json({ success: false, message: "OTP not found or expired." });
+		}
+
+		const otpCompare = await bcrypt.compare(otp, userotp.otp);
+
+		if (!otpCompare) {
+			return res.status(400).json({ success: false, message: 'OTP does not match.' });
+		}
+
+		await OTPVerification.findOneAndDelete({ email });
+
+		return res.status(200).json({ success: true, message: 'OTP Verified Successfully!' });
+	} catch (err) {
+		console.error(err);
+		return res.status(500).send('Internal server error occurred.');
+	}
 });
 
-// Route 3 : Verify OTP and User : POST "/user/userauth/verifyotp"
-router.post("/verifyotp", async (req, res) => {
-  let success = false;
-  const { email, otp } = req.body;
+// Route to signup
+router.post('/signup', async (req, res) => {
+	const data = req.body;
+	const resumeFile = req.files ? req.files.resume : null;
+	const imageFile = req.files ? req.files.image : null;
 
-  try {
-    // check whether the user with the email exists already.
-    let userotp = await OTPVerification.findOne({ email: email });
-    if (!userotp) {
-      return res.status(400).json({ success, message: "User doesn't exists." });
-    }
+	try {
+		let user = await User.findOne({ email: data.email });
 
-    const currDate = new Date();
+		if (user) {
+			if (user.isverified) {
+				return res.status(400).json({
+					success: false,
+					message: 'This email is already verified. Please login directly.'
+				});
+			} else {
+				return res.status(400).json({
+					success: false,
+					message: 'Please verify your email before signing up.'
+				});
+			}
+		}
 
-    if (currDate.getTime() <= userotp.timestamp + 120000) {
-      const otpCompare = await bcrypt.compare(otp, userotp.otp);
-      if (!otpCompare) {
-        return res
-          .status(400)
-          .json({ success, message: "OTP does not matched." });
-      }
+		user = new User({
+			email: data.email,
+			password: data.password, // Assuming password is hashed before saving
+			type: data.type
+		});
 
-      const newUser = {};
-      newUser.isverified = true;
+		await user.save();
 
-      let user = await User.findOneAndUpdate(
-        { email },
-        { $set: newUser },
-        { new: true }
-      );
-      await OTPVerification.findOneAndDelete({ email });
+		let resumePath = null;
+		let imagePath = null;
 
-      // Token
-      const token = jwt.sign({ _id: user._id }, authKeys.jwtSecretKey);
+		if (resumeFile) {
+			resumePath = `./public/resume/${Date.now()}-${resumeFile.name}`;
+			resumeFile.mv(resumePath, (err) => {
+				if (err) {
+					console.error(err);
+					return res.status(500).send(err);
+				}
+			});
+		}
 
-      success = true;
-      return res
-        .status(200)
-        .json({
-          success,
-          token,
-          type: user.type,
-          message: "OTP Verified Successfully!",
-        });
-    } else {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Time limit exceed. Please try again.",
-        });
-    }
-  } catch (err) {
-    console.log(err.message);
-    res.status(500).send("Internal server error occured.");
-  }
+		if (imageFile) {
+			imagePath = `./public/profile/${Date.now()}-${imageFile.name}`;
+			imageFile.mv(imagePath, (err) => {
+				if (err) {
+					console.error(err);
+					return res.status(500).send(err);
+				}
+			});
+		}
+
+		if (data.type === 'recruiter') {
+			let recruiter = new Recruiter({
+				userId: user._id,
+				name: data.name,
+				contactNumber: data.contactNumber,
+				bio: data.bio
+			});
+			await recruiter.save();
+		} else {
+			let jobApplicant = new JobApplicant({
+				userId: user._id,
+				name: data.name,
+				education: data.education,
+				skills: data.skills,
+				rating: data.rating,
+				resume: resumePath,
+				profile: imagePath
+			});
+			await jobApplicant.save();
+		}
+
+		return res.status(201).json({ success: true, message: 'User created successfully' });
+	} catch (err) {
+		console.error(err);
+		return res.status(400).json({ success: false, message: 'Error signing up' });
+	}
 });
 
-router.post("/resendotp", async (req, res) => {
-  try {
-    let userotp = await OTPVerification.findOne({ email: email });
-    if (!userotp) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User doesn't exist." });
-    }
-    sendOTP(req, res);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ success: false, message: "Server error: Try after sometime." });
-  }
+// Route to login
+router.post('/login', (req, res, next) => {
+	passport.authenticate('local', { session: false }, function (err, user, info) {
+		if (err) {
+			return next(err);
+		}
+		if (!user) {
+			return res.status(401).json(info);
+		}
+		const token = jwt.sign({ _id: user._id }, authKeys.jwtSecretKey);
+		return res.json({
+			token: token,
+			type: user.type,
+			success: true,
+			message: 'User logged in successfully'
+		});
+	})(req, res, next);
+});
+
+// Route to resend OTP
+router.post('/resendotp', async (req, res) => {
+	try {
+		const { email } = req.body;
+		let userotp = await OTPVerification.findOne({ email: email });
+		if (!userotp) {
+			return res.status(400).json({ success: false, message: "User doesn't exist." });
+		}
+		await sendOTP(req, res);
+		return res.status(200).json({ success: true, message: 'OTP resent successfully' });
+	} catch (err) {
+		console.error(err);
+		return res.status(500).json({
+			success: false,
+			message: 'Server error: Try again after sometime.'
+		});
+	}
 });
 
 module.exports = router;
