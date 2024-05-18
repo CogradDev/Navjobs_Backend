@@ -321,11 +321,12 @@ router.get("/user", jwtAuth, (req, res) => {
       .then((recruiter) => {
         if (recruiter == null) {
           res.status(404).json({
+            success: false,
             message: "User does not exist",
           });
           return;
         }
-        res.json(recruiter);
+        res.json({ success: true, data: recruiter});
       })
       .catch((err) => {
         res.status(400).json(err);
@@ -335,11 +336,12 @@ router.get("/user", jwtAuth, (req, res) => {
       .then((jobApplicant) => {
         if (jobApplicant == null) {
           res.status(404).json({
+            success: false,
             message: "User does not exist",
           });
           return;
         }
-        res.json(jobApplicant);
+        res.json({success: true, jobApplicant});
       })
       .catch((err) => {
         res.status(400).json(err);
@@ -353,6 +355,7 @@ router.get("/user/:id", jwtAuth, (req, res) => {
     .then((userData) => {
       if (userData === null) {
         res.status(404).json({
+          success: false,
           message: "User does not exist",
         });
         return;
@@ -402,6 +405,7 @@ router.put("/user", jwtAuth, (req, res) => {
       .then((recruiter) => {
         if (recruiter == null) {
           res.status(404).json({
+            success: false,
             message: "User does not exist",
           });
           return;
@@ -419,6 +423,7 @@ router.put("/user", jwtAuth, (req, res) => {
           .save()
           .then(() => {
             res.json({
+              success: true,
               message: "User information updated successfully",
             });
           })
