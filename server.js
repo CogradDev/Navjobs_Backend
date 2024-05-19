@@ -29,7 +29,7 @@ if (!fs.existsSync('./public/profile')) {
 }
 
 const app = express();
-const port = process.env.PORT || 4444;
+const port = 4444;
 
 app.use(bodyParser.json()); // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
