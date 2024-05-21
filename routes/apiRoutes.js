@@ -210,14 +210,15 @@ router.get('/jobs', jwtAuth, (req, res) => {
 		.then((posts) => {
 			if (posts == null) {
 				res.status(404).json({
+					success: false,
 					message: 'No job found'
 				});
 				return;
 			}
-			res.json(posts);
+			res.json({success: true, data: posts});
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({success: false, message: err});
 		});
 });
 
@@ -254,6 +255,7 @@ router.put('/jobs/:id', jwtAuth, (req, res) => {
 		.then((job) => {
 			if (job == null) {
 				res.status(404).json({
+					success: false,
 					message: 'Job does not exist'
 				});
 				return;
@@ -272,15 +274,16 @@ router.put('/jobs/:id', jwtAuth, (req, res) => {
 				.save()
 				.then(() => {
 					res.json({
+						success: true,
 						message: 'Job details updated successfully'
 					});
 				})
 				.catch((err) => {
-					res.status(400).json(err);
+					res.status(400).json({success: false, message: err});
 				});
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({success: false, message: err});
 		});
 });
 
@@ -289,6 +292,7 @@ router.delete('/jobs/:id', jwtAuth, (req, res) => {
 	const user = req.user;
 	if (user.type != 'recruiter') {
 		res.status(401).json({
+			success: false,
 			message: "You don't have permissions to delete the job"
 		});
 		return;
@@ -298,18 +302,21 @@ router.delete('/jobs/:id', jwtAuth, (req, res) => {
 		userId: user.id
 	})
 		.then((job) => {
+			console.log("The jobs are :  ", req.user.id);
 			if (job === null) {
 				res.status(401).json({
+					success: false,
 					message: "You don't have permissions to delete the job"
 				});
 				return;
 			}
 			res.json({
+				success: true,
 				message: 'Job deleted successfully'
 			});
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({success: false, message: err});
 		});
 });
 

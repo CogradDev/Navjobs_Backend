@@ -134,7 +134,9 @@ router.post('/signup', async (req, res) => {
 			await jobApplicant.save();
 		}
 
-		return res.status(201).json({ success: true, message: 'User created successfully' });
+		const token = jwt.sign({ _id: user._id }, authKeys.jwtSecretKey);
+
+		return res.status(201).json({ token: token, type: user.type, success: true, message: 'User created successfully' });
 	} catch (err) {
 		console.error(err);
 		return res.status(400).json({ success: false, message: 'Error signing up' });
