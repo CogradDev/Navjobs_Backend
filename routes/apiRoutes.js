@@ -210,14 +210,15 @@ router.get('/jobs', jwtAuth, (req, res) => {
 		.then((posts) => {
 			if (posts == null) {
 				res.status(404).json({
+					success: false,
 					message: 'No job found'
 				});
 				return;
 			}
-			res.json(posts);
+			res.json({ success: true, data: posts });
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({ success: false, message: err });
 		});
 });
 
@@ -227,14 +228,15 @@ router.get('/jobs/:id', jwtAuth, (req, res) => {
 		.then((job) => {
 			if (job == null) {
 				res.status(400).json({
+					success: false,
 					message: 'Job does not exist'
 				});
 				return;
 			}
-			res.json(job);
+			res.json({ success: true, data: job });
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({ success: false, message: err });
 		});
 });
 
@@ -243,6 +245,7 @@ router.put('/jobs/:id', jwtAuth, (req, res) => {
 	const user = req.user;
 	if (user.type != 'recruiter') {
 		res.status(401).json({
+			success: false,
 			message: "You don't have permissions to change the job details"
 		});
 		return;
@@ -254,6 +257,7 @@ router.put('/jobs/:id', jwtAuth, (req, res) => {
 		.then((job) => {
 			if (job == null) {
 				res.status(404).json({
+					success: false,
 					message: 'Job does not exist'
 				});
 				return;
@@ -272,15 +276,16 @@ router.put('/jobs/:id', jwtAuth, (req, res) => {
 				.save()
 				.then(() => {
 					res.json({
+						success: true,
 						message: 'Job details updated successfully'
 					});
 				})
 				.catch((err) => {
-					res.status(400).json(err);
+					res.status(400).json({ success: false, message: err });
 				});
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({ success: false, message: err });
 		});
 });
 
@@ -289,6 +294,7 @@ router.delete('/jobs/:id', jwtAuth, (req, res) => {
 	const user = req.user;
 	if (user.type != 'recruiter') {
 		res.status(401).json({
+			success: false,
 			message: "You don't have permissions to delete the job"
 		});
 		return;
@@ -300,16 +306,18 @@ router.delete('/jobs/:id', jwtAuth, (req, res) => {
 		.then((job) => {
 			if (job === null) {
 				res.status(401).json({
+					success: false,
 					message: "You don't have permissions to delete the job"
 				});
 				return;
 			}
 			res.json({
+				success: true,
 				message: 'Job deleted successfully'
 			});
 		})
 		.catch((err) => {
-			res.status(400).json(err);
+			res.status(400).json({ success: false, message: err });
 		});
 });
 
@@ -341,7 +349,7 @@ router.get('/user', jwtAuth, (req, res) => {
 					});
 					return;
 				}
-				res.json({ success: true, data: jobApplicant });
+				res.json({ success: true, jobApplicant });
 			})
 			.catch((err) => {
 				res.status(400).json(err);
@@ -439,7 +447,6 @@ router.put('/user', jwtAuth, (req, res) => {
 			.then((jobApplicant) => {
 				if (jobApplicant == null) {
 					res.status(404).json({
-						success: false,
 						message: 'User does not exist'
 					});
 					return;
@@ -464,7 +471,6 @@ router.put('/user', jwtAuth, (req, res) => {
 					.save()
 					.then(() => {
 						res.json({
-							success: true,
 							message: 'User information updated successfully'
 						});
 					})
@@ -1338,5 +1344,38 @@ router.get('/rating', jwtAuth, (req, res) => {
 		});
 	});
 });
+
+// Application.findOne({
+//   _id: id,
+//   userId: user._id,
+// })
+//   .then((application) => {
+//     application.status = status;
+//     application
+//       .save()
+//       .then(() => {
+//         res.json({
+//           message: `Application ${status} successfully`,
+//         });
+//       })
+//       .catch((err) => {
+//         res.status(400).json(err);
+//       });
+//   })
+//   .catch((err) => {
+//     res.status(400).json(err);
+//   });
+
+// router.get("/jobs", (req, res, next) => {
+//   passport.authenticate("jwt", { session: false }, function (err, user, info) {
+//     if (err) {
+//       return next(err);
+//     }
+//     if (!user) {
+//       res.status(401).json(info);
+//       return;
+//     }
+//   })(req, res, next);
+// });
 
 module.exports = router;
