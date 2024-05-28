@@ -10,6 +10,11 @@ let schema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["recruiter", "applicant"],
+      required: true,
+    },
     education: [
       {
         institutionName: {

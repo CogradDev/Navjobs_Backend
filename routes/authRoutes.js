@@ -130,7 +130,13 @@ router.post('/signup', async (req, res) => {
                 userId: user._id,
                 name: data.name,
                 contactNumber: data.contactNumber,
-                bio: data.bio
+                bio: data.bio,
+                type: 'recruiter',
+                companyName: "",
+                location: "",
+                industry : "",
+                companyDescription :"", 
+                contactInformation : data.email,
             });
             await recruiter.save();
         } else {
@@ -151,7 +157,8 @@ router.post('/signup', async (req, res) => {
                 skills: data.skills,
                 rating: data.rating,
                 resume: resumePath,
-                profile: imagePath
+                profile: imagePath,
+                type: "applicant",
             });
             await jobApplicant.save();
         }
