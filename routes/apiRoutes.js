@@ -61,8 +61,6 @@ router.post('/jobs', jwtAuth, (req, res) => {
 		});
 });
 
-
-
 // To get all the jobs [with filtering and sorting]
 router.get('/jobs', jwtAuth, async (req, res) => {
 	let user = req.user;
@@ -120,7 +118,7 @@ router.get('/jobs', jwtAuth, async (req, res) => {
 	} else if (req.query.salaryMax) {
 		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
 	}
- console.log(req.query.duration)
+	console.log(req.query.duration);
 	if (req.query.duration) {
 		findParams.duration = { $gte: parseInt(req.query.duration) };
 	}
@@ -188,57 +186,94 @@ router.get('/jobs/:id', jwtAuth, (req, res) => {
 });
 
 // to update info of a particular job
-router.put('/jobs/:id', jwtAuth, (req, res) => {
-	const user = req.user;
-	if (user.type != 'recruiter') {
-		res.status(401).json({
-			success: false,
-			message: "You don't have permissions to change the job details"
+router.put('/jobs/:id', jwtAuth, async (req, res) => {
+	try {
+		const user = req.user;
+		if (user.type !== 'recruiter') {
+			return res.status(401).json({
+				success: false,
+				message: "You don't have permissions to change the job details"
+			});
+		}
+
+		const job = await Job.findOne({
+			_id: req.params.id,
+			userId: user.id
 		});
-		return;
+
+		if (!job) {
+			return res.status(404).json({
+				success: false,
+				message: 'Job does not exist'
+			});
+		}
+
+		const {
+			maxApplicants,
+			maxPositions,
+			deadline,
+			title,
+			jobType,
+			salary,
+			duration,
+			experienceLevel,
+			educationRequirement,
+			employmentType,
+			jobDescription,
+			requiredSkillset
+		} = req.body;
+		if (maxApplicants) {
+			job.maxApplicants = maxApplicants;
+		}
+		if (maxPositions) {
+			job.maxPositions = maxPositions;
+		}
+		if (deadline) {
+			job.deadline = deadline;
+		}
+		if (title) {
+			job.title = title;
+		}
+		if (jobType) {
+			job.jobType = jobType;
+		}
+		if (salary) {
+			job.salary = salary;
+		}
+		if (duration) {
+			job.duration = duration;
+		}
+		if (experienceLevel) {
+			job.experienceLevel = experienceLevel;
+		}
+		if (employmentType) {
+			job.employmentType = employmentType;
+		}
+		if (jobDescription) {
+			job.jobDescription = jobDescription;
+		}
+		if (educationRequirement) {
+			job.educationRequirement = educationRequirement;
+		}
+		if (requiredSkillset) {
+			job.requiredSkillset = requiredSkillset;
+		}
+
+		await job.save();
+
+		return res.json({
+			success: true,
+			message: 'Job details updated successfully'
+		});
+	} catch (err) {
+		return res.status(400).json({ success: false, message: err.message });
 	}
-	Job.findOne({
-		_id: req.params.id,
-		userId: user.id
-	})
-		.then((job) => {
-			if (job == null) {
-				res.status(404).json({
-					success: false,
-					message: 'Job does not exist'
-				});
-				return;
-			}
-			const data = req.body;
-			if (data.maxApplicants) {
-				job.maxApplicants = data.maxApplicants;
-			}
-			if (data.maxPositions) {
-				job.maxPositions = data.maxPositions;
-			}
-			if (data.deadline) {
-				job.deadline = data.deadline;
-			}
-			job
-				.save()
-				.then(() => {
-					res.json({
-						success: true,
-						message: 'Job details updated successfully'
-					});
-				})
-				.catch((err) => {
-					res.status(400).json({ success: false, message: err });
-				});
-		})
-		.catch((err) => {
-			res.status(400).json({ success: false, message: err });
-		});
 });
 
 // to delete a job
 router.delete('/jobs/:id', jwtAuth, (req, res) => {
 	const user = req.user;
+
 	if (user.type != 'recruiter') {
 		res.status(401).json({
 			success: false,
