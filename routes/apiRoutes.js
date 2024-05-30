@@ -15,7 +15,7 @@ const router = express.Router();
 router.post('/jobs', jwtAuth, (req, res) => {
 	const user = req.user;
 
-	if (user.type != 'recruiter') {
+	if (user.type !== 'recruiter') {
 		res.status(401).json({
 			success: false,
 			message: "You don't have permissions to add jobs"
@@ -28,15 +28,27 @@ router.post('/jobs', jwtAuth, (req, res) => {
 	let job = new Job({
 		userId: user._id,
 		title: data.title,
+		companyName: data.companyName,
+		location: data.location,
+		jobType: data.jobType,
+		salary: data.salary,
+		jobDescription: data.jobDescription,
+		requiredSkillset: data.requiredSkillset,
+		duration: data.duration,
+		postedBy: data.postedBy,
+		applicationDeadline: data.applicationDeadline,
+		experienceLevel: data.experienceLevel,
+		educationRequirement: data.educationRequirement,
+		industry: data.industry,
+		employmentType: data.employmentType,
+		companyDescription: data.companyDescription,
+		contactInformation: data.contactInformation,
+		dateOfPosting: data.dateOfPosting || new Date(),
 		maxApplicants: data.maxApplicants,
 		maxPositions: data.maxPositions,
-		dateOfPosting: data.dateOfPosting,
-		deadline: data.deadline,
-		skillsets: data.skillsets,
-		jobType: data.jobType,
-		duration: data.duration,
-		salary: data.salary,
-		rating: data.rating
+		activeApplications: data.activeApplications || 0,
+		acceptedCandidates: data.acceptedCandidates || 0,
+		rating: data.rating || -1.0
 	});
 
 	job
@@ -49,177 +61,110 @@ router.post('/jobs', jwtAuth, (req, res) => {
 		});
 });
 
-// to get all the jobs [pagination] [for recruiter personal and for everyone]
-router.get('/jobs', jwtAuth, (req, res) => {
+// To get all the jobs [with filtering and sorting]
+router.get('/jobs', jwtAuth, async (req, res) => {
 	let user = req.user;
 
 	let findParams = {};
 	let sortParams = {};
 
-	// const page = parseInt(req.query.page) ? parseInt(req.query.page) : 1;
-	// const limit = parseInt(req.query.limit) ? parseInt(req.query.limit) : 10;
-	// const skip = page - 1 >= 0 ? (page - 1) * limit : 0;
-
-	// to list down jobs posted by a particular recruiter
+	// To list down jobs posted by a particular recruiter
 	if (user.type === 'recruiter' && req.query.myjobs) {
-		findParams = {
-			...findParams,
-			userId: user._id
-		};
+		findParams.userId = user._id;
 	}
 
+	// Search filter based on job details
 	if (req.query.q) {
-		findParams = {
-			...findParams,
-			title: {
-				$regex: new RegExp(req.query.q, 'i')
-			}
-		};
-	}
-
-	if (req.query.jobType) {
-		let jobTypes = [];
-		if (Array.isArray(req.query.jobType)) {
-			jobTypes = req.query.jobType;
-		} else {
-			jobTypes = [req.query.jobType];
-		}
-		console.log(jobTypes);
-		findParams = {
-			...findParams,
-			jobType: {
-				$in: jobTypes
-			}
-		};
-	}
-
-	if (req.query.salaryMin && req.query.salaryMax) {
-		findParams = {
-			...findParams,
-			$and: [
-				{
-					salary: {
-						$gte: parseInt(req.query.salaryMin)
-					}
-				},
-				{
-					salary: {
-						$lte: parseInt(req.query.salaryMax)
-					}
-				}
-			]
-		};
-	} else if (req.query.salaryMin) {
-		findParams = {
-			...findParams,
-			salary: {
-				$gte: parseInt(req.query.salaryMin)
-			}
-		};
-	} else if (req.query.salaryMax) {
-		findParams = {
-			...findParams,
-			salary: {
-				$lte: parseInt(req.query.salaryMax)
-			}
-		};
-	}
-
-	if (req.query.duration) {
-		findParams = {
-			...findParams,
-			duration: {
-				$lt: parseInt(req.query.duration)
-			}
-		};
-	}
-
-	if (req.query.asc) {
-		if (Array.isArray(req.query.asc)) {
-			req.query.asc.map((key) => {
-				sortParams = {
-					...sortParams,
-					[key]: 1
-				};
-			});
-		} else {
-			sortParams = {
-				...sortParams,
-				[req.query.asc]: 1
-			};
-		}
-	}
-
-	if (req.query.desc) {
-		if (Array.isArray(req.query.desc)) {
-			req.query.desc.map((key) => {
-				sortParams = {
-					...sortParams,
-					[key]: -1
-				};
-			});
-		} else {
-			sortParams = {
-				...sortParams,
-				[req.query.desc]: -1
-			};
-		}
-	}
-
-	console.log(findParams);
-	console.log(sortParams);
-
-	// Job.find(findParams).collation({ locale: "en" }).sort(sortParams);
-	// .skip(skip)
-	// .limit(limit)
-
-	let arr = [
-		{
-			$lookup: {
-				from: 'recruiterinfos',
-				localField: 'userId',
-				foreignField: 'userId',
-				as: 'recruiter'
-			}
-		},
-		{ $unwind: '$recruiter' },
-		{ $match: findParams }
-	];
-
-	if (Object.keys(sortParams).length > 0) {
-		arr = [
-			{
-				$lookup: {
-					from: 'recruiterinfos',
-					localField: 'userId',
-					foreignField: 'userId',
-					as: 'recruiter'
-				}
-			},
-			{ $unwind: '$recruiter' },
-			{ $match: findParams },
-			{
-				$sort: sortParams
-			}
+		const searchRegex = new RegExp(req.query.q, 'i');
+		findParams.$or = [
+			{ title: searchRegex },
+			{ companyName: searchRegex },
+			{ location: searchRegex },
+			{ jobType: searchRegex },
+			{ jobDescription: searchRegex },
+			{ requiredSkillset: { $in: [searchRegex] } }, // Match any skill in requiredSkillset
+			{ experienceLevel: searchRegex },
+			{ educationRequirement: searchRegex },
+			{ industry: searchRegex },
+			{ employmentType: searchRegex },
+			{ companyDescription: searchRegex }
 		];
 	}
 
-	console.log(arr);
+	if (req.query.locationQuery) {
+		const location = req.query.locationQuery.trim().toLowerCase();
+		if (location === 'remote' || location === 'work from home') {
+			findParams.$or = [
+				{ location: { $regex: /remote|work from home/i } }, // Case-insensitive match for remote or work from home
+				{ jobType: { $regex: /remote|work from home/i } } // Case-insensitive match for job type remote or work from home
+			];
+		} else {
+			findParams.location = { $regex: new RegExp(location, 'i') }; // Case-insensitive match for the location
+		}
+	}
 
-	Job.aggregate(arr)
-		.then((posts) => {
-			if (posts == null) {
-				res.status(404).json({
-					success: false,
-					message: 'No job found'
-				});
-				return;
-			}
-			res.json({ success: true, data: posts });
-		})
-		.catch((err) => {
-			res.status(400).json({ success: false, message: err });
-		});
+	if (req.query.jobType) {
+		let jobTypes = Array.isArray(req.query.jobType) ? req.query.jobType : [req.query.jobType];
+		findParams.jobType = { $in: jobTypes };
+	}
+
+	if (req.query.salaryMin && req.query.salaryMax) {
+		findParams.salary = {
+			$gte: parseInt(req.query.salaryMin),
+			$lte: parseInt(req.query.salaryMax)
+		};
+	} else if (req.query.salaryMin) {
+		findParams.salary = { $gte: parseInt(req.query.salaryMin) };
+	} else if (req.query.salaryMax) {
+		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
+	}
+	console.log(req.query.duration);
+	if (req.query.duration) {
+		findParams.duration = { $gte: parseInt(req.query.duration) };
+	}
+
+	if (req.query.asc) {
+		let keys = Array.isArray(req.query.asc) ? req.query.asc : [req.query.asc];
+		keys.forEach((key) => (sortParams[key] = 1));
+	}
+
+	if (req.query.desc) {
+		let keys = Array.isArray(req.query.desc) ? req.query.desc : [req.query.desc];
+		keys.forEach((key) => (sortParams[key] = -1));
+	}
+
+	if (req.query.sort) {
+		const sortOrder = req.query.order === 'asc' ? 1 : -1;
+		switch (req.query.sort) {
+			case 'date':
+				sortParams.createdAt = sortOrder; // Ascending or descending based on order
+				break;
+			case 'salary':
+				sortParams.salary = sortOrder; // Ascending or descending based on order
+				break;
+			case 'duration':
+				sortParams.duration = sortOrder; // Ascending or descending based on order
+				break;
+			case 'rating':
+				sortParams.rating = sortOrder; // Ascending or descending based on order
+				break;
+			default:
+				break;
+		}
+	}
+
+	// console.log('findParams:', findParams);
+	// console.log('sortParams:', sortParams);
+
+	try {
+		const jobs = await Job.find(findParams).sort(sortParams);
+		if (!jobs || jobs.length === 0) {
+			return res.status(404).json({ success: false, message: 'No jobs found' });
+		}
+		res.json({ success: true, data: jobs });
+	} catch (err) {
+		res.status(400).json({ success: false, message: err.message });
+	}
 });
 
 // to get info about a particular job
@@ -241,57 +186,94 @@ router.get('/jobs/:id', jwtAuth, (req, res) => {
 });
 
 // to update info of a particular job
-router.put('/jobs/:id', jwtAuth, (req, res) => {
-	const user = req.user;
-	if (user.type != 'recruiter') {
-		res.status(401).json({
-			success: false,
-			message: "You don't have permissions to change the job details"
+router.put('/jobs/:id', jwtAuth, async (req, res) => {
+	try {
+		const user = req.user;
+		if (user.type !== 'recruiter') {
+			return res.status(401).json({
+				success: false,
+				message: "You don't have permissions to change the job details"
+			});
+		}
+
+		const job = await Job.findOne({
+			_id: req.params.id,
+			userId: user.id
 		});
-		return;
+
+		if (!job) {
+			return res.status(404).json({
+				success: false,
+				message: 'Job does not exist'
+			});
+		}
+
+		const {
+			maxApplicants,
+			maxPositions,
+			deadline,
+			title,
+			jobType,
+			salary,
+			duration,
+			experienceLevel,
+			educationRequirement,
+			employmentType,
+			jobDescription,
+			requiredSkillset
+		} = req.body;
+		if (maxApplicants) {
+			job.maxApplicants = maxApplicants;
+		}
+		if (maxPositions) {
+			job.maxPositions = maxPositions;
+		}
+		if (deadline) {
+			job.deadline = deadline;
+		}
+		if (title) {
+			job.title = title;
+		}
+		if (jobType) {
+			job.jobType = jobType;
+		}
+		if (salary) {
+			job.salary = salary;
+		}
+		if (duration) {
+			job.duration = duration;
+		}
+		if (experienceLevel) {
+			job.experienceLevel = experienceLevel;
+		}
+		if (employmentType) {
+			job.employmentType = employmentType;
+		}
+		if (jobDescription) {
+			job.jobDescription = jobDescription;
+		}
+		if (educationRequirement) {
+			job.educationRequirement = educationRequirement;
+		}
+		if (requiredSkillset) {
+			job.requiredSkillset = requiredSkillset;
+		}
+
+		await job.save();
+
+		return res.json({
+			success: true,
+			message: 'Job details updated successfully'
+		});
+	} catch (err) {
+		return res.status(400).json({ success: false, message: err.message });
 	}
-	Job.findOne({
-		_id: req.params.id,
-		userId: user.id
-	})
-		.then((job) => {
-			if (job == null) {
-				res.status(404).json({
-					success: false,
-					message: 'Job does not exist'
-				});
-				return;
-			}
-			const data = req.body;
-			if (data.maxApplicants) {
-				job.maxApplicants = data.maxApplicants;
-			}
-			if (data.maxPositions) {
-				job.maxPositions = data.maxPositions;
-			}
-			if (data.deadline) {
-				job.deadline = data.deadline;
-			}
-			job
-				.save()
-				.then(() => {
-					res.json({
-						success: true,
-						message: 'Job details updated successfully'
-					});
-				})
-				.catch((err) => {
-					res.status(400).json({ success: false, message: err });
-				});
-		})
-		.catch((err) => {
-			res.status(400).json({ success: false, message: err });
-		});
 });
 
 // to delete a job
 router.delete('/jobs/:id', jwtAuth, (req, res) => {
 	const user = req.user;
+
 	if (user.type != 'recruiter') {
 		res.status(401).json({
 			success: false,
@@ -427,6 +409,19 @@ router.put('/user', jwtAuth, (req, res) => {
 				if (data.bio) {
 					recruiter.bio = data.bio;
 				}
+				if (data.companyName) {
+					recruiter.companyName = data.companyName;
+				}
+				if (data.location) {
+					recruiter.location = data.location;
+				}
+				if (data.industry) {
+					recruiter.industry = data.industry;
+				}
+				if (data.companyDescription) {
+					recruiter.companyDescription = data.companyDescription;
+				}
+
 				recruiter
 					.save()
 					.then(() => {
@@ -1344,38 +1339,5 @@ router.get('/rating', jwtAuth, (req, res) => {
 		});
 	});
 });
-
-// Application.findOne({
-//   _id: id,
-//   userId: user._id,
-// })
-//   .then((application) => {
-//     application.status = status;
-//     application
-//       .save()
-//       .then(() => {
-//         res.json({
-//           message: `Application ${status} successfully`,
-//         });
-//       })
-//       .catch((err) => {
-//         res.status(400).json(err);
-//       });
-//   })
-//   .catch((err) => {
-//     res.status(400).json(err);
-//   });
-
-// router.get("/jobs", (req, res, next) => {
-//   passport.authenticate("jwt", { session: false }, function (err, user, info) {
-//     if (err) {
-//       return next(err);
-//     }
-//     if (!user) {
-//       res.status(401).json(info);
-//       return;
-//     }
-//   })(req, res, next);
-// });
 
 module.exports = router;
