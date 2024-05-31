@@ -15,31 +15,36 @@ let schema = new mongoose.Schema(
       enum: ["recruiter", "applicant"],
       required: true,
     },
+    bio: {
+      type: String,
+    },
+    contactNumber: {
+      type: String,
+      validate: {
+        validator: function (v) {
+          return /\+\d{1,4}\d{10}/.test(v); // Example validation for phone number with country code
+        },
+        message: "Invalid contact number",
+      },
+    },
     education: [
       {
         institutionName: {
           type: String,
           required: true,
         },
-        startYear: {
-          type: Number,
-          min: 1930,
-          max: new Date().getFullYear(),
+        startDate: {
+          type: Date,
           required: true,
-          validate: Number.isInteger,
         },
-        endYear: {
-          type: Number,
-          max: new Date().getFullYear(),
-          validate: [
-            { validator: Number.isInteger, msg: "Year should be an integer" },
-            {
-              validator: function (value) {
-                return this.startYear <= value;
-              },
-              msg: "End year should be greater than or equal to Start year",
+        endDate: {
+          type: Date,
+          validate: {
+            validator: function (value) {
+              return this.startDate <= value;
             },
-          ],
+            message: "End date should be greater than or equal to start date",
+          },
         },
       },
     ],
@@ -52,16 +57,15 @@ let schema = new mongoose.Schema(
         validator: function (v) {
           return v >= -1.0 && v <= 5.0;
         },
-        msg: "Invalid rating",
+        message: "Invalid rating",
       },
     },
     resume: {
       type: String,
-      required:true,
+      required: true,
     },
     profile: {
       type: String,
-     
     },
   },
   { collation: { locale: "en" } }
