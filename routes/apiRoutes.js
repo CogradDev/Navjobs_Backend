@@ -387,97 +387,65 @@ router.get('/user/:id', jwtAuth, (req, res) => {
 });
 
 // update user details
-router.put('/user', jwtAuth, (req, res) => {
+router.put('/user', jwtAuth, async (req, res) => {
 	const user = req.user;
 	const data = req.body;
-	if (user.type == 'recruiter') {
-		Recruiter.findOne({ userId: user._id })
-			.then((recruiter) => {
-				if (recruiter == null) {
-					res.status(404).json({
-						success: false,
-						message: 'User does not exist'
-					});
-					return;
-				}
-				if (data.name) {
-					recruiter.name = data.name;
-				}
-				if (data.contactNumber) {
-					recruiter.contactNumber = data.contactNumber;
-				}
-				if (data.bio) {
-					recruiter.bio = data.bio;
-				}
-				if (data.companyName) {
-					recruiter.companyName = data.companyName;
-				}
-				if (data.location) {
-					recruiter.location = data.location;
-				}
-				if (data.industry) {
-					recruiter.industry = data.industry;
-				}
-				if (data.companyDescription) {
-					recruiter.companyDescription = data.companyDescription;
-				}
 
-				recruiter
-					.save()
-					.then(() => {
-						res.json({
-							success: true,
-							message: 'User information updated successfully'
-						});
-					})
-					.catch((err) => {
-						res.status(400).json(err);
-					});
-			})
-			.catch((err) => {
-				res.status(400).json(err);
-			});
-	} else {
-		JobApplicant.findOne({ userId: user._id })
-			.then((jobApplicant) => {
-				if (jobApplicant == null) {
-					res.status(404).json({
-						message: 'User does not exist'
-					});
-					return;
-				}
-				if (data.name) {
-					jobApplicant.name = data.name;
-				}
-				if (data.education) {
-					jobApplicant.education = data.education;
-				}
-				if (data.skills) {
-					jobApplicant.skills = data.skills;
-				}
-				if (data.resume) {
-					jobApplicant.resume = data.resume;
-				}
-				if (data.profile) {
-					jobApplicant.profile = data.profile;
-				}
-				console.log(jobApplicant);
-				jobApplicant
-					.save()
-					.then(() => {
-						res.json({
-							message: 'User information updated successfully'
-						});
-					})
-					.catch((err) => {
-						res.status(400).json(err);
-					});
-			})
-			.catch((err) => {
-				res.status(400).json(err);
-			});
+	const resumeFile = req.files ? req.files.resume : null;
+	const imageFile = req.files ? req.files.profile : null;
+
+	let resumePath = null;
+	let imagePath = null;
+
+	if (resumeFile) {
+		resumePath = `./public/resume/${Date.now()}-${resumeFile.name}`;
+		await resumeFile.mv(resumePath);
+	}
+
+	if (imageFile) {
+		imagePath = `./public/profile/${Date.now()}-${imageFile.name}`;
+		await imageFile.mv(imagePath);
+	}
+
+	try {
+		if (user.type == 'recruiter') {
+			const recruiter = await Recruiter.findOne({ userId: user._id });
+			if (!recruiter) {
+				return res.status(404).json({ success: false, message: 'User does not exist' });
+			}
+
+			if (data.name) recruiter.name = data.name;
+			if (data.contactNumber) recruiter.contactNumber = data.contactNumber;
+			if (data.bio) recruiter.bio = data.bio;
+			if (data.companyName) recruiter.companyName = data.companyName;
+			if (data.location) recruiter.location = data.location;
+			if (data.industry) recruiter.industry = data.industry;
+			if (data.companyDescription) recruiter.companyDescription = data.companyDescription;
+
+			await recruiter.save();
+			return res.json({ success: true, message: 'User information updated successfully' });
+		} else {
+			const jobApplicant = await JobApplicant.findOne({ userId: user._id });
+			if (!jobApplicant) {
+				return res.status(404).json({ success: false, message: 'User does not exist' });
+			}
+
+			if (data.name) jobApplicant.name = data.name;
+			if (data.education) jobApplicant.education = JSON.parse(data.education);
+			if (data.skills) jobApplicant.skills = JSON.parse(data.skills);
+			if (resumePath) jobApplicant.resume = resumePath;
+			if (imagePath) jobApplicant.profile = imagePath;
+			if (data.contactNumber) jobApplicant.contactNumber = data.contactNumber;
+			if (data.bio) jobApplicant.bio = data.bio;
+
+			await jobApplicant.save();
+			return res.json({ success: true, message: 'User information updated successfully' });
+		}
+	} catch (err) {
+		return res.status(400).json({ success: false, message: 'Failed to update user information', error: err });
 	}
 });
+
 
 // apply for a job [todo: test: done]
 router.post('/jobs/:id/applications', jwtAuth, (req, res) => {
@@ -1339,5 +1307,38 @@ router.get('/rating', jwtAuth, (req, res) => {
 		});
 	});
 });
+
+// Application.findOne({
+//   _id: id,
+//   userId: user._id,
+// })
+//   .then((application) => {
+//     application.status = status;
+//     application
+//       .save()
+//       .then(() => {
+//         res.json({
+//           message: `Application ${status} successfully`,
+//         });
+//       })
+//       .catch((err) => {
+//         res.status(400).json(err);
+//       });
+//   })
+//   .catch((err) => {
+//     res.status(400).json(err);
+//   });
+
+// router.get("/jobs", (req, res, next) => {
+//   passport.authenticate("jwt", { session: false }, function (err, user, info) {
+//     if (err) {
+//       return next(err);
+//     }
+//     if (!user) {
+//       res.status(401).json(info);
+//       return;
+//     }
+//   })(req, res, next);
+// });
 
 module.exports = router;

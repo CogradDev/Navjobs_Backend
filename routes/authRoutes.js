@@ -28,9 +28,7 @@ router.post('/sendotp', async (req, res) => {
 		await sendOTP(req, res);
 	} catch (err) {
 		console.error(err);
-		return res
-			.status(500)
-			.json({ success: false, message: 'Server error: Try again after sometime.' });
+		return res.status(500).json({ success: false, message: 'Server error: Try again after sometime.' });
 	}
 });
 
@@ -42,7 +40,7 @@ router.post('/verifyotp', async (req, res) => {
 		const userotp = await OTPVerification.findOne({ email });
 
 		if (!userotp) {
-			return res.status(400).json({ success: false, message: 'OTP not found or expired.' });
+			return res.status(400).json({ success: false, message: "OTP not found or expired." });
 		}
 
 		const otpCompare = await bcrypt.compare(otp, userotp.otp);
@@ -62,115 +60,116 @@ router.post('/verifyotp', async (req, res) => {
 
 // Route to signup
 router.post('/signup', async (req, res) => {
-	const data = req.body;
-	const resumeFile = req.files ? req.files.resume : null;
-	const imageFile = req.files ? req.files.profile : null;
+    const data = req.body;
+    const resumeFile = req.files ? req.files.resume : null;
+    const imageFile = req.files ? req.files.profile : null;
 
-	console.log(resumeFile);
-	console.log(imageFile);
+	console.log(resumeFile)
+	console.log(imageFile)
 
-	try {
-		let user = await User.findOne({ email: data.email });
+    try {
+        let user = await User.findOne({ email: data.email });
 
-		if (user) {
-			if (user.isverified) {
-				return res.status(400).json({
-					success: false,
-					message: 'This email is already verified. Please login directly.'
-				});
-			} else {
-				return res.status(400).json({
-					success: false,
-					message: 'Please verify your email before signing up.'
-				});
-			}
-		}
+        if (user) {
+            if (user.isverified) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'This email is already verified. Please login directly.'
+                });
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Please verify your email before signing up.'
+                });
+            }
+        }
 
-		user = new User({
-			email: data.email,
-			password: data.password, // Assuming password is hashed before saving
-			type: data.type,
-			isverified: true
-		});
+        user = new User({
+            email: data.email,
+            password: data.password, // Assuming password is hashed before saving
+            type: data.type,
+            isverified : true,
+        });
 
-		await user.save();
+        await user.save();
 
-		let resumePath = null;
-		let imagePath = null;
+        let resumePath = null;
+        let imagePath = null;
 
-		if (resumeFile) {
-			resumePath = `./public/resume/${Date.now()}-${resumeFile.name}`;
-			await new Promise((resolve, reject) => {
-				resumeFile.mv(resumePath, (err) => {
-					if (err) {
-						console.error(err);
-						reject(err);
-					} else {
-						resolve();
-					}
-				});
-			});
-		}
+        if (resumeFile) {
+            resumePath = `./public/resume/${Date.now()}-${resumeFile.name}`;
+            await new Promise((resolve, reject) => {
+                resumeFile.mv(resumePath, (err) => {
+                    if (err) {
+                        console.error(err);
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+        }
 
-		if (imageFile) {
-			imagePath = `./public/profile/${Date.now()}-${imageFile.name}`;
-			console.log(imagePath);
-			await new Promise((resolve, reject) => {
-				imageFile.mv(imagePath, (err) => {
-					if (err) {
-						console.error(err);
-						reject(err);
-					} else {
-						resolve();
-					}
-				});
-			});
-		}
+        if (imageFile) {
+            imagePath = `./public/profile/${Date.now()}-${imageFile.name}`;
+			console.log(imagePath)
+            await new Promise((resolve, reject) => {
+                imageFile.mv(imagePath, (err) => {
+                    if (err) {
+                        console.error(err);
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+        }
 
-		if (data.type === 'recruiter') {
-			let recruiter = new Recruiter({
-				userId: user._id,
-				name: data.name,
-				contactNumber: data.contactNumber,
-				bio: data.bio,
-				type: 'recruiter',
-				companyName: '',
-				location: '',
-				industry: '',
-				companyDescription: '',
-				contactInformation: data.email
-			});
-			await recruiter.save();
-		} else {
-			// Ensure education is an array of objects
-			let education = [];
-			if (Array.isArray(data.education)) {
-				education = data.education.map((edu) => ({
-					institutionName: edu.institutionName,
-					startYear: edu.startYear,
-					endYear: edu.endYear
-				}));
-			}
+        if (data.type === 'recruiter') {
+            let recruiter = new Recruiter({
+                userId: user._id,
+                name: data.name,
+                contactNumber: data.contactNumber,
+                bio: data.bio,
+                type: 'recruiter',
+                companyName: "",
+                location: "",
+                industry : "",
+                companyDescription :"", 
+                contactInformation : data.email,
+            });
+            await recruiter.save();
+        } else {
+            // Ensure education is an array of objects
+            let education = [];
+            if (Array.isArray(data.education)) {
+                education = data.education.map(edu => ({
+                    institutionName: edu.institutionName,
+                    startYear: edu.startYear,
+                    endYear: edu.endYear
+                }));
+            }
 
-			let jobApplicant = new JobApplicant({
-				userId: user._id,
-				name: data.name,
-				education: education,
-				skills: data.skills,
-				rating: data.rating,
-				resume: resumePath,
-				profile: imagePath,
-				type: 'applicant'
-			});
-			await jobApplicant.save();
-		}
+            let jobApplicant = new JobApplicant({
+                userId: user._id,
+                name: data.name,
+                education: education,
+                skills: data.skills,
+                rating: data.rating,
+                resume: resumePath,
+                profile: imagePath,
+                type: "applicant",
+            });
+            await jobApplicant.save();
+        }
 
-		return res.status(201).json({ success: true, message: 'User created successfully' });
-	} catch (err) {
-		console.error(err);
-		return res.status(400).json({ success: false, message: 'Error signing up' });
-	}
+        return res.status(201).json({ success: true, message: 'User created successfully' });
+    } catch (err) {
+        console.error(err);
+        return res.status(400).json({ success: false, message: 'Error signing up' });
+    }
 });
+
 
 // Route to login
 router.post('/login', (req, res, next) => {
