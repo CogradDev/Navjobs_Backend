@@ -64,8 +64,8 @@ router.post('/signup', async (req, res) => {
     const resumeFile = req.files ? req.files.resume : null;
     const imageFile = req.files ? req.files.profile : null;
 
-	console.log(resumeFile)
-	console.log(imageFile)
+	// console.log(resumeFile)
+	// console.log(imageFile)
 
     try {
         let user = await User.findOne({ email: data.email });
@@ -112,7 +112,7 @@ router.post('/signup', async (req, res) => {
 
         if (imageFile) {
             imagePath = `./public/profile/${Date.now()}-${imageFile.name}`;
-			console.log(imagePath)
+			//console.log(imagePath)
             await new Promise((resolve, reject) => {
                 imageFile.mv(imagePath, (err) => {
                     if (err) {
