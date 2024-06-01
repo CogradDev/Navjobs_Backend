@@ -12,7 +12,7 @@ const Rating = require('../db/Rating');
 const router = express.Router();
 
 // To add new job
-router.post('/jobs', jwtAuth, (req, res) => {
+router.post('/jobs', jwtAuth, async (req, res) => {
 	const user = req.user;
 
 	if (user.type !== 'recruiter') {
@@ -23,19 +23,22 @@ router.post('/jobs', jwtAuth, (req, res) => {
 		return;
 	}
 
+	const recruiter = await Recruiter.findOne({userId : user._id })
+    //console.log(recruiter)
+
 	const data = req.body;
 
 	let job = new Job({
 		userId: user._id,
 		title: data.title,
 		companyName: data.companyName,
-		location: data.location,
+		location: recruiter.location,
 		jobType: data.jobType,
 		salary: data.salary,
 		jobDescription: data.jobDescription,
 		requiredSkillset: data.requiredSkillset,
 		duration: data.duration,
-		postedBy: data.postedBy,
+		companyName: recruiter.companyName,
 		applicationDeadline: data.applicationDeadline,
 		experienceLevel: data.experienceLevel,
 		educationRequirement: data.educationRequirement,
@@ -118,7 +121,7 @@ router.get('/jobs', jwtAuth, async (req, res) => {
 	} else if (req.query.salaryMax) {
 		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
 	}
-	console.log(req.query.duration);
+	//console.log(req.query.duration);
 	if (req.query.duration) {
 		findParams.duration = { $gte: parseInt(req.query.duration) };
 	}
@@ -442,123 +445,102 @@ router.put('/user', jwtAuth, async (req, res) => {
 			return res.json({ success: true, message: 'User information updated successfully' });
 		}
 	} catch (err) {
-		return res.status(400).json({ success: false, message: 'Failed to update user information', error: err });
+		return res
+			.status(400)
+			.json({ success: false, message: 'Failed to update user information', error: err });
 	}
 });
 
-
 // apply for a job [todo: test: done]
-router.post('/jobs/:id/applications', jwtAuth, (req, res) => {
+router.post('/jobs/:id/applications', jwtAuth, async (req, res) => {
 	const user = req.user;
-	if (user.type != 'applicant') {
-		res.status(401).json({
-			message: "You don't have permissions to apply for a job"
-		});
-		return;
+	
+	if (user.type !== 'applicant') {
+		return res.status(401).json({ message: "You don't have permissions to apply for a job" });
 	}
+
 	const data = req.body;
 	const jobId = req.params.id;
 
-	// check whether applied previously
-	// find job
-	// check count of active applications < limit
-	// check user had < 10 active applications && check if user is not having any accepted jobs (user id)
-	// store the data in applications
-
-	Application.findOne({
-		userId: user._id,
-		jobId: jobId,
-		status: {
-			$nin: ['deleted', 'accepted', 'cancelled']
-		}
-	})
-		.then((appliedApplication) => {
-			console.log(appliedApplication);
-			if (appliedApplication !== null) {
-				res.status(400).json({
-					message: 'You have already applied for this job'
-				});
-				return;
-			}
-
-			Job.findOne({ _id: jobId })
-				.then((job) => {
-					if (job === null) {
-						res.status(404).json({
-							message: 'Job does not exist'
-						});
-						return;
-					}
-					Application.countDocuments({
-						jobId: jobId,
-						status: {
-							$nin: ['rejected', 'deleted', 'cancelled', 'finished']
-						}
-					})
-						.then((activeApplicationCount) => {
-							if (activeApplicationCount < job.maxApplicants) {
-								Application.countDocuments({
-									userId: user._id,
-									status: {
-										$nin: ['rejected', 'deleted', 'cancelled', 'finished']
-									}
-								})
-									.then((myActiveApplicationCount) => {
-										if (myActiveApplicationCount < 10) {
-											Application.countDocuments({
-												userId: user._id,
-												status: 'accepted'
-											}).then((acceptedJobs) => {
-												if (acceptedJobs === 0) {
-													const application = new Application({
-														userId: user._id,
-														recruiterId: job.userId,
-														jobId: job._id,
-														status: 'applied',
-														sop: data.sop
-													});
-													application
-														.save()
-														.then(() => {
-															res.json({
-																message: 'Job application successful'
-															});
-														})
-														.catch((err) => {
-															res.status(400).json(err);
-														});
-												} else {
-													res.status(400).json({
-														message: 'You already have an accepted job. Hence you cannot apply.'
-													});
-												}
-											});
-										} else {
-											res.status(400).json({
-												message: 'You have 10 active applications. Hence you cannot apply.'
-											});
-										}
-									})
-									.catch((err) => {
-										res.status(400).json(err);
-									});
-							} else {
-								res.status(400).json({
-									message: 'Application limit reached'
-								});
-							}
-						})
-						.catch((err) => {
-							res.status(400).json(err);
-						});
-				})
-				.catch((err) => {
-					res.status(400).json(err);
-				});
-		})
-		.catch((err) => {
-			res.json(400).json(err);
+	try {
+		// Check if the user has already applied for this job
+		const appliedApplication = await Application.findOne({
+			userId: user._id,
+			jobId: jobId,
+			status: { $nin: ['deleted', 'accepted', 'cancelled'] }
 		});
+
+		if (appliedApplication) {
+			return res.status(400).json({ message: 'You have already applied for this job' });
+		}
+
+		// Find the job
+		const job = await Job.findOne({ _id: jobId });
+		if (!job) {
+			return res.status(404).json({ message: 'Job does not exist' });
+		}
+
+		// Check the count of active applications for the job
+		const activeApplicationCount = await Application.countDocuments({
+			jobId: jobId,
+			status: { $nin: ['rejected', 'deleted', 'cancelled', 'finished'] }
+		});
+
+		if (activeApplicationCount >= job.maxApplicants) {
+			return res.status(400).json({ message: 'Application limit reached' });
+		}
+
+		// Check the count of active applications by the user
+		const myActiveApplicationCount = await Application.countDocuments({
+			userId: user._id,
+			status: { $nin: ['rejected', 'deleted', 'cancelled', 'finished'] }
+		});
+
+		if (myActiveApplicationCount >= 10) {
+			return res
+				.status(400)
+				.json({ message: 'You have 10 active applications. Hence you cannot apply.' });
+		}
+
+		// Check if the user has any accepted jobs
+		const acceptedJobs = await Application.countDocuments({
+			userId: user._id,
+			status: 'accepted'
+		});
+
+		if (acceptedJobs > 0) {
+			return res
+				.status(400)
+				.json({ message: 'You already have an accepted job. Hence you cannot apply.' });
+		}
+
+		const applicant = await JobApplicant.findOne({ userId: user._id });
+	
+		// Store the application data
+		const application = new Application({
+			userId: user._id,
+			email: user.email,
+			recruiterId: job.userId,
+			jobId: job._id,
+			status: 'Applied',
+			sop: data.sop,
+			resume : applicant.resume,
+			name : applicant.name,
+			bio : applicant.bio,
+			contactNumber : applicant.contactNumber,
+			education : applicant.education,
+			skills : applicant.skills,
+			rating : applicant.rating,
+			profile : applicant.profile
+		});
+
+		await application.save();
+		res.json({ message: 'Job application successful' });
+	} catch (err) {
+		res
+			.status(500)
+			.json({ message: 'An error occurred while processing your application', error: err.message });
+	}
 });
 
 // recruiter gets applications for a particular job [pagination] [todo: test: done]
@@ -596,7 +578,7 @@ router.get('/jobs/:id/applications', jwtAuth, (req, res) => {
 		// .skip(skip)
 		// .limit(limit)
 		.then((applications) => {
-			res.json(applications);
+			res.json({ success: true, applications });
 		})
 		.catch((err) => {
 			res.status(400).json(err);
@@ -814,8 +796,8 @@ router.put('/applications/:id', jwtAuth, (req, res) => {
 		}
 	} else {
 		if (status === 'cancelled') {
-			console.log(id);
-			console.log(user._id);
+			// console.log(id);
+			// console.log(user._id);
 			Application.findOneAndUpdate(
 				{
 					_id: id,
@@ -828,7 +810,7 @@ router.put('/applications/:id', jwtAuth, (req, res) => {
 				}
 			)
 				.then((tmp) => {
-					console.log(tmp);
+					//console.log(tmp);
 					res.json({
 						message: `Application ${status} successfully`
 					});
@@ -963,7 +945,7 @@ router.put('/rating', jwtAuth, (req, res) => {
 		})
 			.then((rating) => {
 				if (rating === null) {
-					console.log('new rating');
+					//console.log('new rating');
 					Application.countDocuments({
 						userId: data.applicantId,
 						recruiterId: user._id,
@@ -1126,11 +1108,11 @@ router.put('/rating', jwtAuth, (req, res) => {
 			category: 'job'
 		})
 			.then((rating) => {
-				console.log(user._id);
-				console.log(data.jobId);
-				console.log(rating);
+				// console.log(user._id);
+				// console.log(data.jobId);
+				// console.log(rating);
 				if (rating === null) {
-					console.log(rating);
+					//console.log(rating);
 					Application.countDocuments({
 						userId: user._id,
 						jobId: data.jobId,
@@ -1246,7 +1228,7 @@ router.put('/rating', jwtAuth, (req, res) => {
 										return;
 									}
 									const avg = result[0].average;
-									console.log(avg);
+									//console.log(avg);
 
 									Job.findOneAndUpdate(
 										{

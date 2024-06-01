@@ -53,7 +53,10 @@ let schema = new mongoose.Schema(
 				}
 			]
 		},
-		postedBy: {
+		companyName: {
+			type: String
+		},
+		location: {
 			type: String
 		},
 		applicationDeadline: {
