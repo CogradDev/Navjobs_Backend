@@ -64,17 +64,11 @@ router.post('/jobs', jwtAuth, async (req, res) => {
 		});
 });
 
-// To get all the jobs [with filtering and sorting]
-router.get('/jobs', jwtAuth, async (req, res) => {
-	let user = req.user;
 
+// To get all the jobs [with filtering and sorting] without authentication
+router.get('/jobs', async (req, res) => {
 	let findParams = {};
 	let sortParams = {};
-
-	// To list down jobs posted by a particular recruiter
-	if (user.type === 'recruiter' && req.query.myjobs) {
-		findParams.userId = user._id;
-	}
 
 	// Search filter based on job details
 	if (req.query.q) {
@@ -121,7 +115,7 @@ router.get('/jobs', jwtAuth, async (req, res) => {
 	} else if (req.query.salaryMax) {
 		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
 	}
-	//console.log(req.query.duration);
+
 	if (req.query.duration) {
 		findParams.duration = { $gte: parseInt(req.query.duration) };
 	}
@@ -156,8 +150,107 @@ router.get('/jobs', jwtAuth, async (req, res) => {
 		}
 	}
 
-	// console.log('findParams:', findParams);
-	// console.log('sortParams:', sortParams);
+	try {
+		const jobs = await Job.find(findParams).sort(sortParams);
+		if (!jobs || jobs.length === 0) {
+			return res.status(404).json({ success: false, message: 'No jobs found' });
+		}
+		res.json({ success: true, data: jobs });
+	} catch (err) {
+		res.status(400).json({ success: false, message: err.message });
+	}
+});
+
+
+// To get jobs created by a particular recruiter
+router.get('/jobs/recruiter', jwtAuth, async (req, res) => {
+	let user = req.user;
+    console.log("hi")
+	if (user.type !== 'recruiter') {
+		return res.status(403).json({ success: false, message: 'Access denied' });
+	}
+    
+	let findParams = { userId: user._id };
+	let sortParams = {};
+
+	if (req.query.q) {
+		const searchRegex = new RegExp(req.query.q, 'i');
+		findParams.$or = [
+			{ title: searchRegex },
+			{ companyName: searchRegex },
+			{ location: searchRegex },
+			{ jobType: searchRegex },
+			{ jobDescription: searchRegex },
+			{ requiredSkillset: { $in: [searchRegex] } },
+			{ experienceLevel: searchRegex },
+			{ educationRequirement: searchRegex },
+			{ industry: searchRegex },
+			{ employmentType: searchRegex },
+			{ companyDescription: searchRegex }
+		];
+	}
+
+	if (req.query.locationQuery) {
+		const location = req.query.locationQuery.trim().toLowerCase();
+		if (location === 'remote' || location === 'work from home') {
+			findParams.$or = [
+				{ location: { $regex: /remote|work from home/i } },
+				{ jobType: { $regex: /remote|work from home/i } }
+			];
+		} else {
+			findParams.location = { $regex: new RegExp(location, 'i') };
+		}
+	}
+
+	if (req.query.jobType) {
+		let jobTypes = Array.isArray(req.query.jobType) ? req.query.jobType : [req.query.jobType];
+		findParams.jobType = { $in: jobTypes };
+	}
+
+	if (req.query.salaryMin && req.query.salaryMax) {
+		findParams.salary = {
+			$gte: parseInt(req.query.salaryMin),
+			$lte: parseInt(req.query.salaryMax)
+		};
+	} else if (req.query.salaryMin) {
+		findParams.salary = { $gte: parseInt(req.query.salaryMin) };
+	} else if (req.query.salaryMax) {
+		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
+	}
+
+	if (req.query.duration) {
+		findParams.duration = { $gte: parseInt(req.query.duration) };
+	}
+
+	if (req.query.asc) {
+		let keys = Array.isArray(req.query.asc) ? req.query.asc : [req.query.asc];
+		keys.forEach((key) => (sortParams[key] = 1));
+	}
+
+	if (req.query.desc) {
+		let keys = Array.isArray(req.query.desc) ? req.query.desc : [req.query.desc];
+		keys.forEach((key) => (sortParams[key] = -1));
+	}
+
+	if (req.query.sort) {
+		const sortOrder = req.query.order === 'asc' ? 1 : -1;
+		switch (req.query.sort) {
+			case 'date':
+				sortParams.createdAt = sortOrder;
+				break;
+			case 'salary':
+				sortParams.salary = sortOrder;
+				break;
+			case 'duration':
+				sortParams.duration = sortOrder;
+				break;
+			case 'rating':
+				sortParams.rating = sortOrder;
+				break;
+			default:
+				break;
+		}
+	}
 
 	try {
 		const jobs = await Job.find(findParams).sort(sortParams);
