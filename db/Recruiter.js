@@ -41,6 +41,9 @@ let schema = new mongoose.Schema(
 		companyDescription: {
 			type: String
 		},
+		profile: {
+			type: String
+		},
 		contactInformation: {
 			email: {
 				type: String,

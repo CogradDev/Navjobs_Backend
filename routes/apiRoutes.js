@@ -23,8 +23,8 @@ router.post('/jobs', jwtAuth, async (req, res) => {
 		return;
 	}
 
-	const recruiter = await Recruiter.findOne({userId : user._id })
-    //console.log(recruiter)
+	const recruiter = await Recruiter.findOne({ userId: user._id });
+	//console.log(recruiter)
 
 	const data = req.body;
 
@@ -64,17 +64,10 @@ router.post('/jobs', jwtAuth, async (req, res) => {
 		});
 });
 
-// To get all the jobs [with filtering and sorting]
-router.get('/jobs', jwtAuth, async (req, res) => {
-	let user = req.user;
-
+// To get all the jobs [with filtering and sorting] without authentication
+router.get('/jobs', async (req, res) => {
 	let findParams = {};
 	let sortParams = {};
-
-	// To list down jobs posted by a particular recruiter
-	if (user.type === 'recruiter' && req.query.myjobs) {
-		findParams.userId = user._id;
-	}
 
 	// Search filter based on job details
 	if (req.query.q) {
@@ -121,7 +114,7 @@ router.get('/jobs', jwtAuth, async (req, res) => {
 	} else if (req.query.salaryMax) {
 		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
 	}
-	//console.log(req.query.duration);
+
 	if (req.query.duration) {
 		findParams.duration = { $gte: parseInt(req.query.duration) };
 	}
@@ -156,8 +149,106 @@ router.get('/jobs', jwtAuth, async (req, res) => {
 		}
 	}
 
-	// console.log('findParams:', findParams);
-	// console.log('sortParams:', sortParams);
+	try {
+		const jobs = await Job.find(findParams).sort(sortParams);
+		if (!jobs || jobs.length === 0) {
+			return res.status(404).json({ success: false, message: 'No jobs found' });
+		}
+		res.json({ success: true, data: jobs });
+	} catch (err) {
+		res.status(400).json({ success: false, message: err.message });
+	}
+});
+
+// To get jobs created by a particular recruiter
+router.get('/jobs/recruiter', jwtAuth, async (req, res) => {
+	let user = req.user;
+	console.log('hi');
+	if (user.type !== 'recruiter') {
+		return res.status(403).json({ success: false, message: 'Access denied' });
+	}
+
+	let findParams = { userId: user._id };
+	let sortParams = {};
+
+	if (req.query.q) {
+		const searchRegex = new RegExp(req.query.q, 'i');
+		findParams.$or = [
+			{ title: searchRegex },
+			{ companyName: searchRegex },
+			{ location: searchRegex },
+			{ jobType: searchRegex },
+			{ jobDescription: searchRegex },
+			{ requiredSkillset: { $in: [searchRegex] } },
+			{ experienceLevel: searchRegex },
+			{ educationRequirement: searchRegex },
+			{ industry: searchRegex },
+			{ employmentType: searchRegex },
+			{ companyDescription: searchRegex }
+		];
+	}
+
+	if (req.query.locationQuery) {
+		const location = req.query.locationQuery.trim().toLowerCase();
+		if (location === 'remote' || location === 'work from home') {
+			findParams.$or = [
+				{ location: { $regex: /remote|work from home/i } },
+				{ jobType: { $regex: /remote|work from home/i } }
+			];
+		} else {
+			findParams.location = { $regex: new RegExp(location, 'i') };
+		}
+	}
+
+	if (req.query.jobType) {
+		let jobTypes = Array.isArray(req.query.jobType) ? req.query.jobType : [req.query.jobType];
+		findParams.jobType = { $in: jobTypes };
+	}
+
+	if (req.query.salaryMin && req.query.salaryMax) {
+		findParams.salary = {
+			$gte: parseInt(req.query.salaryMin),
+			$lte: parseInt(req.query.salaryMax)
+		};
+	} else if (req.query.salaryMin) {
+		findParams.salary = { $gte: parseInt(req.query.salaryMin) };
+	} else if (req.query.salaryMax) {
+		findParams.salary = { $lte: parseInt(req.query.salaryMax) };
+	}
+
+	if (req.query.duration) {
+		findParams.duration = { $gte: parseInt(req.query.duration) };
+	}
+
+	if (req.query.asc) {
+		let keys = Array.isArray(req.query.asc) ? req.query.asc : [req.query.asc];
+		keys.forEach((key) => (sortParams[key] = 1));
+	}
+
+	if (req.query.desc) {
+		let keys = Array.isArray(req.query.desc) ? req.query.desc : [req.query.desc];
+		keys.forEach((key) => (sortParams[key] = -1));
+	}
+
+	if (req.query.sort) {
+		const sortOrder = req.query.order === 'asc' ? 1 : -1;
+		switch (req.query.sort) {
+			case 'date':
+				sortParams.createdAt = sortOrder;
+				break;
+			case 'salary':
+				sortParams.salary = sortOrder;
+				break;
+			case 'duration':
+				sortParams.duration = sortOrder;
+				break;
+			case 'rating':
+				sortParams.rating = sortOrder;
+				break;
+			default:
+				break;
+		}
+	}
 
 	try {
 		const jobs = await Job.find(findParams).sort(sortParams);
@@ -454,7 +545,7 @@ router.put('/user', jwtAuth, async (req, res) => {
 // apply for a job [todo: test: done]
 router.post('/jobs/:id/applications', jwtAuth, async (req, res) => {
 	const user = req.user;
-	
+
 	if (user.type !== 'applicant') {
 		return res.status(401).json({ message: "You don't have permissions to apply for a job" });
 	}
@@ -515,7 +606,7 @@ router.post('/jobs/:id/applications', jwtAuth, async (req, res) => {
 		}
 
 		const applicant = await JobApplicant.findOne({ userId: user._id });
-	
+
 		// Store the application data
 		const application = new Application({
 			userId: user._id,
@@ -524,14 +615,15 @@ router.post('/jobs/:id/applications', jwtAuth, async (req, res) => {
 			jobId: job._id,
 			status: 'Applied',
 			sop: data.sop,
-			resume : applicant.resume,
-			name : applicant.name,
-			bio : applicant.bio,
-			contactNumber : applicant.contactNumber,
-			education : applicant.education,
-			skills : applicant.skills,
-			rating : applicant.rating,
-			profile : applicant.profile
+			resume: applicant.resume,
+			name: applicant.name,
+			bio: applicant.bio,
+			contactNumber: applicant.contactNumber,
+			education: applicant.education,
+			skills: applicant.skills,
+			rating: applicant.rating,
+			profile: applicant.profile,
+			dateOfJoining: ''
 		});
 
 		await application.save();
@@ -645,201 +737,113 @@ router.put('/applications/:id', jwtAuth, (req, res) => {
 	const user = req.user;
 	const id = req.params.id;
 	const status = req.body.status;
-
-	// "applied", // when a applicant is applied
-	// "shortlisted", // when a applicant is shortlisted
-	// "accepted", // when a applicant is accepted
-	// "rejected", // when a applicant is rejected
-	// "deleted", // when any job is deleted
-	// "cancelled", // an application is cancelled by its author or when other application is accepted
-	// "finished", // when job is over
-
-	if (user.type === 'recruiter') {
-		if (status === 'accepted') {
-			// get job id from application
-			// get job info for maxPositions count
-			// count applications that are already accepted
-			// compare and if condition is satisfied, then save
-
-			Application.findOne({
-				_id: id,
-				recruiterId: user._id
-			})
+	const dateOfJoining = Date.now();
+	// Function to handle recruiter actions
+	const handleRecruiterActions = () => {
+		if (status === 'Accepted') {
+			Application.findOne({ _id: id, recruiterId: user._id })
 				.then((application) => {
-					if (application === null) {
-						res.status(404).json({
-							message: 'Application not found'
-						});
-						return;
+					if (!application) {
+						return res.status(404).json({ message: 'Application not found' });
 					}
 
-					Job.findOne({
-						_id: application.jobId,
-						userId: user._id
-					}).then((job) => {
-						if (job === null) {
-							res.status(404).json({
-								message: 'Job does not exist'
-							});
-							return;
+					Job.findOne({ _id: application.jobId, userId: user._id }).then((job) => {
+						if (!job) {
+							return res.status(404).json({ message: 'Job does not exist' });
 						}
 
 						Application.countDocuments({
 							recruiterId: user._id,
 							jobId: job._id,
-							status: 'accepted'
+							status: 'Accepted'
 						}).then((activeApplicationCount) => {
 							if (activeApplicationCount < job.maxPositions) {
-								// accepted
 								application.status = status;
-								application.dateOfJoining = req.body.dateOfJoining;
+								application.dateOfJoining = dateOfJoining; // Update dateOfJoining
+
 								application
 									.save()
 									.then(() => {
 										Application.updateMany(
 											{
-												_id: {
-													$ne: application._id
-												},
+												_id: { $ne: application._id },
 												userId: application.userId,
 												status: {
-													$nin: ['rejected', 'deleted', 'cancelled', 'accepted', 'finished']
+													$nin: ['Rejected', 'Deleted', 'Cancelled', 'Accepted', 'Finished']
 												}
 											},
-											{
-												$set: {
-													status: 'cancelled'
-												}
-											},
+											{ $set: { status: 'Cancelled' } },
 											{ multi: true }
 										)
 											.then(() => {
-												if (status === 'accepted') {
-													Job.findOneAndUpdate(
-														{
-															_id: job._id,
-															userId: user._id
-														},
-														{
-															$set: {
-																acceptedCandidates: activeApplicationCount + 1
-															}
-														}
-													)
-														.then(() => {
-															res.json({
-																message: `Application ${status} successfully`
-															});
-														})
-														.catch((err) => {
-															res.status(400).json(err);
-														});
-												} else {
-													res.json({
-														message: `Application ${status} successfully`
-													});
-												}
+												Job.findOneAndUpdate(
+													{ _id: job._id, userId: user._id },
+													{ $set: { acceptedCandidates: activeApplicationCount + 1 } }
+												)
+													.then(() => res.json({ message: `Application ${status} successfully` }))
+													.catch((err) => res.status(400).json(err));
 											})
-											.catch((err) => {
-												res.status(400).json(err);
-											});
+											.catch((err) => res.status(400).json(err));
 									})
-									.catch((err) => {
-										res.status(400).json(err);
-									});
+									.catch((err) => res.status(400).json(err));
 							} else {
-								res.status(400).json({
-									message: 'All positions for this job are already filled'
-								});
+								res.status(400).json({ message: 'All positions for this job are already filled' });
 							}
 						});
 					});
 				})
-				.catch((err) => {
-					res.status(400).json(err);
-				});
+				.catch((err) => res.status(400).json(err));
 		} else {
 			Application.findOneAndUpdate(
-				{
-					_id: id,
-					recruiterId: user._id,
-					status: {
-						$nin: ['rejected', 'deleted', 'cancelled']
-					}
-				},
-				{
-					$set: {
-						status: status
-					}
-				}
+				{ _id: id, recruiterId: user._id, status: { $nin: ['Rejected', 'Deleted', 'Cancelled'] } },
+				{ $set: { status: status } }
 			)
 				.then((application) => {
-					if (application === null) {
-						res.status(400).json({
-							message: 'Application status cannot be updated'
-						});
-						return;
+					if (!application) {
+						return res.status(400).json({ message: 'Application status cannot be updated' });
 					}
-					if (status === 'finished') {
-						res.json({
-							message: `Job ${status} successfully`
-						});
-					} else {
-						res.json({
-							message: `Application ${status} successfully`
-						});
-					}
+					res.json({ message: `Application ${status} successfully` });
 				})
-				.catch((err) => {
-					res.status(400).json(err);
-				});
+				.catch((err) => res.status(400).json(err));
 		}
-	} else {
-		if (status === 'cancelled') {
-			// console.log(id);
-			// console.log(user._id);
-			Application.findOneAndUpdate(
-				{
-					_id: id,
-					userId: user._id
-				},
-				{
-					$set: {
-						status: status
-					}
-				}
-			)
-				.then((tmp) => {
-					//console.log(tmp);
-					res.json({
-						message: `Application ${status} successfully`
-					});
-				})
-				.catch((err) => {
-					res.status(400).json(err);
-				});
+	};
+
+	// Function to handle applicant actions
+	const handleApplicantActions = () => {
+		if (status === 'Cancelled') {
+			Application.findOneAndUpdate({ _id: id, userId: user._id }, { $set: { status: status } })
+				.then(() => res.json({ message: `Application ${status} successfully` }))
+				.catch((err) => res.status(400).json(err));
 		} else {
-			res.status(401).json({
-				message: "You don't have permissions to update job status"
-			});
+			res.status(401).json({ message: "You don't have permissions to update job status" });
 		}
+	};
+
+	// Check user type and call appropriate function
+	if (user.type === 'recruiter') {
+		handleRecruiterActions();
+	} else {
+		handleApplicantActions();
 	}
 });
 
 // get a list of final applicants for current job : recruiter
 // get a list of final applicants for all his jobs : recuiter
+// Get a list of final applicants
 router.get('/applicants', jwtAuth, (req, res) => {
 	const user = req.user;
 	if (user.type === 'recruiter') {
 		let findParams = {
 			recruiterId: user._id
 		};
+
 		if (req.query.jobId) {
 			findParams = {
 				...findParams,
 				jobId: new mongoose.Types.ObjectId(req.query.jobId)
 			};
 		}
+
 		if (req.query.status) {
 			if (Array.isArray(req.query.status)) {
 				findParams = {
@@ -853,6 +857,7 @@ router.get('/applicants', jwtAuth, (req, res) => {
 				};
 			}
 		}
+
 		let sortParams = {};
 
 		if (!req.query.asc && !req.query.desc) {
@@ -861,7 +866,7 @@ router.get('/applicants', jwtAuth, (req, res) => {
 
 		if (req.query.asc) {
 			if (Array.isArray(req.query.asc)) {
-				req.query.asc.map((key) => {
+				req.query.asc.forEach((key) => {
 					sortParams = {
 						...sortParams,
 						[key]: 1
@@ -877,7 +882,7 @@ router.get('/applicants', jwtAuth, (req, res) => {
 
 		if (req.query.desc) {
 			if (Array.isArray(req.query.desc)) {
-				req.query.desc.map((key) => {
+				req.query.desc.forEach((key) => {
 					sortParams = {
 						...sortParams,
 						[key]: -1
@@ -911,7 +916,29 @@ router.get('/applicants', jwtAuth, (req, res) => {
 			},
 			{ $unwind: '$job' },
 			{ $match: findParams },
-			{ $sort: sortParams }
+			{ $sort: sortParams },
+			{
+				$project: {
+					userId: 1,
+					status: 1,
+					skills: 1,
+					rating: 1,
+					email: 1,
+					recruiterId: 1,
+					jobId: 1,
+					sop: 1,
+					resume: 1,
+					name: 1,
+					bio: 1,
+					contactNumber: 1,
+					education: 1,
+					profile: 1,
+					dateOfApplication: 1,
+					dateOfJoining: 1, // Ensure this field is included in the response
+					jobApplicant: 1,
+					job: 1
+				}
+			}
 		])
 			.then((applications) => {
 				if (applications.length === 0) {

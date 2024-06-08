@@ -34,14 +34,6 @@ let schema = new mongoose.Schema(
     },
     dateOfJoining: {
       type: Date,
-      validate: [
-        {
-          validator: function (value) {
-            return this.dateOfApplication <= value;
-          },
-          msg: 'dateOfJoining should be greater than dateOfApplication'
-        }
-      ]
     },
     resume: {
       type: String,
@@ -51,7 +43,7 @@ let schema = new mongoose.Schema(
       type: String,
       validate: {
         validator: function (v) {
-          return v.split(' ').filter((ele) => ele != '').length <= 250;
+          return v.split(' ').filter((ele) => ele != '').length <= 2500;
         },
         msg: 'Statement of purpose should not be greater than 250 words'
       }
@@ -121,26 +113,5 @@ let schema = new mongoose.Schema(
   },
   { collation: { locale: 'en' } }
 );
-
-// schema.virtual("applicationUser", {
-//   ref: "JobApplicantInfo",
-//   localField: "userId",
-//   foreignField: "userId",
-//   justOne: true,
-// });
-
-// schema.virtual("applicationRecruiter", {
-//   ref: "RecruiterInfo",
-//   localField: "recruiterId",
-//   foreignField: "userId",
-//   justOne: true,
-// });
-
-// schema.virtual("applicationJob", {
-//   ref: "jobs",
-//   localField: "jobId",
-//   foreignField: "_id",
-//   justOne: true,
-// });
 
 module.exports = mongoose.model('applications', schema);
